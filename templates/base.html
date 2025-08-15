@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ APP_NAME }}</title>
+  <link rel="stylesheet" href="{{ url_for('custom_static', filename='style.css') }}">
+  <style>
+    .container{max-width:1000px;margin:80px auto 100px auto;padding:0 16px}
+    .btn{display:inline-block;background:#313491;color:#fff;padding:12px 16px;margin:8px;border-radius:6px;text-decoration:none}
+    .btn-outline{background:#fff;color:#313491;border:1px solid #313491}
+    .card{background:#fff;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,.08);padding:16px;margin:12px 0}
+    .row{display:flex;flex-wrap:wrap;gap:12px}
+    .col{flex:1 1 240px}
+    .footer-nav a{color:#fff;margin:0 10px}
+    header, nav, footer {padding:10px;text-align:center}
+    header{background:#73182c;color:#fff}
+    nav{background:#313491;color:#fff}
+    footer{background:#e13b3e;color:#fff;position:fixed;bottom:0;width:100%}
+    .flash{padding:10px;margin:10px 0;border-radius:6px}
+    .flash.error{background:#ffe1e1;color:#7a0000}
+    .flash.success{background:#e6ffe7;color:#004d0d}
+  </style>
+</head>
+<body>
+<header>
+  <h1>{{ APP_NAME }}</h1>
+  <div style="margin-top:6px;">
+    {% if session.get('user') %}
+      Logged in as {{ session.user.name }} — <a href="{{ url_for('logout') }}" style="color:#fff;text-decoration:underline">Logout</a>
+      — <a href="{{ url_for('admin') }}" style="color:#fff;text-decoration:underline">Admin</a>
+    {% else %}
+      <a href="{{ url_for('login') }}" style="color:#fff;text-decoration:underline">Login</a>
+    {% endif %}
+  </div>
+</header>
+
+{% block mainnav %}{% endblock %}
+
+<div class="container">
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      {% for cat,msg in messages %}
+        <div class="flash {{ cat }}">{{ msg }}</div>
+      {% endfor %}
+    {% endif %}
+  {% endwith %}
+  {% block content %}{% endblock %}
+</div>
+
+<footer>
+  <div class="footer-nav">
+    <a href="{{ url_for('post_job_checklist') }}">Post-Job Check</a> |
+    <a href="{{ url_for('weekly_maintenance') }}">Maintenance Run</a> |
+    <a href="{{ url_for('maintenance_night') }}">Maintenance Night</a> |
+    <a href="{{ url_for('home') }}">Home</a>
+  </div>
+</footer>
+</body>
+</html>
