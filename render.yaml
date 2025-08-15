@@ -12,10 +12,6 @@ services:
     envVars:
       - key: SECRET_KEY
         generateValue: true
-      - key: PYTHON_VERSION
-        value: 3.12.3
-      - key: PIP_ONLY_BINARY
-        value: ":all:"      # prefer wheels; avoids source builds
     disk:
       name: app-data
       mountPath: /opt/render/project/src/data

@@ -2,7 +2,6 @@ import os, json, csv, time, re
 from datetime import datetime
 from pathlib import Path
 from flask import Flask, render_template, request, redirect, url_for, session, send_from_directory, flash, jsonify
-import pandas as pd
 
 APP_NAME = "Rutherglen Fire Brigade App"
 
@@ -21,88 +20,120 @@ STATUS_OPTIONS = [
     "Damaged or Lost"
 ]
 
-def username_from_name(name):
-    """Lowercase, strip non-alphanum, no spaces."""
-    uname = "".join(ch for ch in str(name).lower() if ch.isalnum())
-    return uname
+def username_from_name(name: str) -> str:
+    return "".join(ch for ch in str(name).lower() if ch.isalnum())
+
+def _read_csv_rows(path: Path):
+    if not path.exists():
+        return []
+    with path.open(newline="", encoding="utf-8") as f:
+        reader = csv.DictReader(f)
+        return list(reader)
+
+def _write_csv_rows(path: Path, fieldnames, rows):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", newline="", encoding="utf-8") as f:
+        w = csv.DictWriter(f, fieldnames=fieldnames)
+        w.writeheader()
+        for r in rows:
+            w.writerow(r)
 
 def load_users_from_crew():
-    """Build user dict from crew CSV and write data/users.csv for reference."""
-    if not CREW_CSV.exists():
+    """
+    Build users from crew_list.csv.
+    Accepts any case for 'Name' column. Writes data/users.csv for reference.
+    """
+    rows = _read_csv_rows(CREW_CSV)
+    if not rows:
         return {}
-    df = pd.read_csv(CREW_CSV)
-    df.columns = [c.strip().lower() for c in df.columns]
-    if "name" not in df.columns:
-        return {}
+    # Find a 'name' column (case-insensitive, trim spaces)
+    # Normalize header keys
+    def norm(k): return re.sub(r"\s+", "", k.strip().lower())
     users = {}
-    for _, row in df.iterrows():
-        name = str(row.get("name", "")).strip()
+    name_key = None
+    if rows:
+        norm_keys = {norm(k): k for k in rows[0].keys()}
+        # prefer exact 'name'
+        if "name" in norm_keys:
+            name_key = norm_keys["name"]
+        else:
+            # fallback: first key that contains 'name'
+            for nk, orig in norm_keys.items():
+                if "name" in nk:
+                    name_key = orig
+                    break
+    if not name_key:
+        return {}
+
+    for r in rows:
+        name = (r.get(name_key) or "").strip()
         if not name:
             continue
         uname = username_from_name(name)
         pwd = f"{uname}3865"
         users[uname] = {"name": name, "password": pwd}
-    # Export a users.csv for admin reference
-    out = pd.DataFrame(
-        [{"name": v["name"], "username": k, "password": v["password"]} for k, v in users.items()]
-    )
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
-    out.to_csv(DATA_DIR / "users.csv", index=False)
+
+    # write users.csv
+    out_rows = [{"name": v["name"], "username": k, "password": v["password"]} for k, v in users.items()]
+    _write_csv_rows(DATA_DIR / "users.csv", ["name", "username", "password"], out_rows)
     return users
 
 def load_equipment_by_appliance():
     """
-    Returns {appliance: [equipment_name, ...], ...}
-    Auto-detects column names (case/space-insensitive). Accepts 'Equipment' or 'Equipment Name'.
+    Returns {appliance: [equipment_name, ...]}.
+    Auto-detects columns (case/space-insensitive). Accepts 'Appliance' and 'Equipment' headings.
     """
-    if not EQUIP_CSV.exists():
+    rows = _read_csv_rows(EQUIP_CSV)
+    if not rows:
         return {}
-    df = pd.read_csv(EQUIP_CSV)
-    # normalize column names: lowercase, remove spaces
-    df.rename(columns={c: re.sub(r"\s+", "", c.strip().lower()) for c in df.columns}, inplace=True)
-    # detect appliance and equipment columns
+    # Build normalized name map from first row headers
+    headers = rows[0].keys()
+    def norm(k): return re.sub(r"\s+", "", k.strip().lower())
+    norm_map = {norm(h): h for h in headers}
+
+    # detect appliance col
     appliance_col = None
+    for nk, orig in norm_map.items():
+        if "appliance" in nk:
+            appliance_col = orig
+            break
+    # detect equipment col
     equip_col = None
-    for c in df.columns:
-        if "appliance" in c:
-            appliance_col = c
-        # allow either 'equipment' or 'equipmentname' (and similar)
-        if ("equipment" in c and "name" in c) or c == "equipment":
-            equip_col = c
-    if not appliance_col:
-        for c in df.columns:
-            if "appliance" in c:
-                appliance_col = c
-                break
+    # prefer 'equipment' or 'equipmentname'
+    for target in ("equipmentname", "equipment"):
+        if target in norm_map:
+            equip_col = norm_map[target]
+            break
     if not equip_col:
-        for c in df.columns:
-            if "equip" in c:
-                equip_col = c
+        for nk, orig in norm_map.items():
+            if "equip" in nk:
+                equip_col = orig
                 break
+
     if not appliance_col or not equip_col:
         return {}
-    equip = {}
-    for appliance, sub in df.groupby(appliance_col):
-        names = sub[equip_col].dropna().astype(str).tolist()
-        equip[str(appliance)] = names
-    return equip
+
+    by_appliance = {}
+    for r in rows:
+        appl = (r.get(appliance_col) or "").strip()
+        eq = (r.get(equip_col) or "").strip()
+        if not appl or not eq:
+            continue
+        by_appliance.setdefault(appl, []).append(eq)
+    return by_appliance
 
 def load_admins():
-    """Return a set of usernames allowed to access the Admin area."""
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     if ADMIN_FILE.exists():
-        admins = {line.strip().lower() for line in ADMIN_FILE.read_text().splitlines() if line.strip()}
-        # safety default: keep alexscott if file is empty
+        admins = {line.strip().lower() for line in ADMIN_FILE.read_text(encoding="utf-8").splitlines() if line.strip()}
         return admins or {"alexscott"}
-    # create default file with alexscott if missing
-    ADMIN_FILE.write_text("alexscott\n")
+    ADMIN_FILE.write_text("alexscott\n", encoding="utf-8")
     return {"alexscott"}
 
 def save_admins(usernames):
-    """Persist admin usernames (lowercase, one per line)."""
     usernames = sorted({u.strip().lower() for u in usernames if u.strip()})
     DATA_DIR.mkdir(parents=True, exist_ok=True)
-    ADMIN_FILE.write_text("\n".join(usernames) + "\n")
+    ADMIN_FILE.write_text("\n".join(usernames) + "\n", encoding="utf-8")
 
 def login_required(view):
     from functools import wraps
@@ -114,7 +145,6 @@ def login_required(view):
     return wrapped
 
 def admin_only(view):
-    """Require the current logged-in user to be on the admins list."""
     from functools import wraps
     @wraps(view)
     def wrapped(*args, **kwargs):
@@ -166,7 +196,6 @@ def admin():
         file = request.files.get("file")
 
         if kind == "admins":
-            # textarea named "admins" containing one username per line
             raw = request.form.get("admins", "")
             new_admins = [line for line in raw.splitlines()]
             save_admins(new_admins)
@@ -188,7 +217,7 @@ def admin():
 def post_job_checklist():
     users = load_users_from_crew()
     crew_choices = [{"username":u, "name":info["name"]} for u,info in sorted(users.items(), key=lambda x: x[1]["name"])]
-    drivers = crew_choices  # all crew can be drivers by default
+    drivers = crew_choices
     appliances = ["Pumper", "Tanker 1", "Tanker 2", "FCV", "Quick Fill", "Trailer", "Collar Tank"]
     equipment_by_appliance = load_equipment_by_appliance()
 
@@ -202,7 +231,6 @@ def post_job_checklist():
             "appliance": request.form.get("appliance"),
             "confirmed_ready": "confirmed_ready" in request.form
         }
-        # collect equipment rows
         equip_rows = []
         for key in request.form:
             if key.startswith("equip__"):
@@ -211,7 +239,6 @@ def post_job_checklist():
                 note = request.form.get(f"note__{eq_name}", "").strip()
                 equip_rows.append({"equipment_name": eq_name, "status": status, "note": note})
 
-        # Note-required validation
         must_note = {"Note for follow-up", "Tagged out for repairs", "Damaged or Lost"}
         for row in equip_rows:
             if row["status"] in must_note and not row["note"]:
@@ -224,7 +251,6 @@ def post_job_checklist():
                     now=datetime.now()
                 )
 
-        # Guard: no equipment captured
         if not equip_rows:
             flash("No equipment items were captured for this appliance. Check your equipment list CSV or choose a different appliance.", "error")
             return render_template(
@@ -235,7 +261,6 @@ def post_job_checklist():
                 now=datetime.now()
             )
 
-        # Save to CSV (one row per equipment)
         SUBMISSIONS_DIR.mkdir(parents=True, exist_ok=True)
         filename = f"post_job_{int(time.time())}.csv"
         path = SUBMISSIONS_DIR / filename
@@ -253,10 +278,7 @@ def post_job_checklist():
                 "note": row["note"],
                 "confirmed_ready": data["confirmed_ready"]
             })
-        with open(path, "w", newline="") as f:
-            writer = csv.DictWriter(f, fieldnames=list(rows[0].keys()))
-            writer.writeheader()
-            writer.writerows(rows)
+        _write_csv_rows(path, list(rows[0].keys()), rows)
         flash(f"Checklist saved: {filename}", "success")
         return redirect(url_for("post_job_checklist_success", fname=filename))
 
