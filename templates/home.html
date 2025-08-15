@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block mainnav %}
+<nav>
+  <strong>Quick Actions</strong>
+</nav>
+{% endblock %}
+{% block content %}
+<div class="row">
+  <div class="col">
+    <div class="card">
+      <h3>Checklists</h3>
+      <a class="btn" href="{{ url_for('post_job_checklist') }}">Post Job Equipment Checklist</a>
+      <a class="btn" href="{{ url_for('maintenance_night') }}">Maintenance Night Checklist</a>
+      <a class="btn" href="{{ url_for('weekly_maintenance') }}">Weekly Maintenance Checklist</a>
+    </div>
+  </div>
+  <div class="col">
+    <div class="card">
+      <h3>Links</h3>
+      <a class="btn" target="_blank" href="https://www.broadcastify.com/webPlayer/19005">D24 Scanner</a>
+      <a class="btn" target="_blank" href='https://jobyyy.net/?q=%22CRUTR%22%20%20%22ALERT%22'>Capcode Scanner</a>
+      <a class="btn" target="_blank" href="https://www.members.cfa.vic.gov.au/">CFA Members Online</a>
+    </div>
+  </div>
+</div>
+{% endblock %}

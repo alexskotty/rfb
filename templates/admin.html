@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card">
+  <h2>Admin</h2>
+  {% if message %}<div class="flash success">{{ message }}</div>{% endif %}
+  <h3>Upload / Replace Data</h3>
+  <form method="post" enctype="multipart/form-data">
+    <label>Replace Crew List (CSV)</label>
+    <input type="hidden" name="kind" value="crew">
+    <input type="file" name="file" accept=".csv" required>
+    <button class="btn" type="submit">Upload Crew CSV</button>
+  </form>
+  <form method="post" enctype="multipart/form-data" style="margin-top:12px;">
+    <label>Replace Equipment List (CSV)</label>
+    <input type="hidden" name="kind" value="equipment">
+    <input type="file" name="file" accept=".csv" required>
+    <button class="btn" type="submit">Upload Equipment CSV</button>
+  </form>
+</div>
+
+<div class="card">
+  <h3>Current Users (from Crew List)</h3>
+  <table>
+    <tr><th>Name</th><th>Username</th><th>Default Password</th></tr>
+    {% for uname, info in users.items() %}
+      <tr><td>{{ info.name }}</td><td>{{ uname }}</td><td>{{ uname }}3865</td></tr>
+    {% endfor %}
+  </table>
+</div>
+
+<div class="card">
+  <h3>Admin Users</h3>
+  <p>Only the usernames listed here can access this Admin area. One username per line.</p>
+  <form method="post">
+    <input type="hidden" name="kind" value="admins">
+    <textarea name="admins" rows="6" style="width:100%; font-family: monospace;">{% for uname, info in users.items() %}{% if uname in load_admins() %}{{ uname }}
+{% endif %}{% endfor %}</textarea>
+    <div style="margin-top:8px;">
+      <button class="btn" type="submit">Save Admin List</button>
+    </div>
+  </form>
+</div>
+
+
+<div class="card">
+  <h3>Equipment by Appliance</h3>
+  {% for appl, items in equipment.items() %}
+    <h4>{{ appl }}</h4>
+    <ul>
+      {% for item in items %}<li>{{ item }}</li>{% endfor %}
+    </ul>
+  {% endfor %}
+</div>
+{% endblock %}

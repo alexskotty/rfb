@@ -1,0 +1,131 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card">
+  <h2>Post Job Equipment Checklist</h2>
+  <form method="post" id="postJobForm">
+    <div class="row">
+      <div class="col">
+        <label>Date</label><br>
+        <input type="date" name="date" required value="{{ now.strftime('%Y-%m-%d') }}">
+      </div>
+      <div class="col">
+        <label>Driver</label><br>
+        <select name="driver" required>
+          <option value="" disabled selected>Select driver</option>
+          {% for d in drivers %}
+          <option value="{{ d.username }}">{{ d.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+
+    <div style="margin-top:12px;">
+      <label>Crew (select all that apply)</label><br>
+      <select name="crew" multiple size="6" required style="min-width:260px;">
+        {% for c in crew %}
+          <option value="{{ c.username }}">{{ c.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="row" style="margin-top:12px;">
+      <div class="col">
+        <label>Job Type</label><br>
+        <select name="job_type" required>
+          <option disabled selected value="">Select job type</option>
+          <option>Grass and Scrub</option>
+          <option>Structure – House</option>
+          <option>Structure – Other</option>
+          <option>Non Structure – Vehicle</option>
+          <option>Non Structure – Other</option>
+          <option>Washaway</option>
+          <option>Assist Ambulance</option>
+          <option>Other</option>
+        </select>
+      </div>
+      <div class="col">
+        <label>Appliance</label><br>
+        <select name="appliance" id="applianceSelect" required>
+          <option disabled selected value="">Select appliance</option>
+          {% for a in appliances %}<option>{{ a }}</option>{% endfor %}
+        </select>
+      </div>
+    </div>
+
+    <div class="card" id="equipmentSection" style="display:none;margin-top:16px;">
+      <h3>Equipment</h3>
+      <div id="equipmentTableWrapper"></div>
+    </div>
+
+    <div style="margin-top:12px;">
+      <label><input type="checkbox" name="confirmed_ready" required> I confirm the appliance's equipment has been checked and is ready for use.</label>
+    </div>
+
+    <div style="margin-top:12px;">
+      <button class="btn" type="submit">Submit Checklist</button>
+      <a class="btn btn-outline" href="{{ url_for('home') }}">Cancel</a>
+    </div>
+  </form>
+</div>
+
+<script>
+const STATUS_OPTIONS = {{ status_options|tojson }};
+let equipmentByAppliance = {};
+
+function buildEquipmentTable(equipmentNames){
+  const wrapper = document.getElementById('equipmentTableWrapper');
+  if (!equipmentNames || equipmentNames.length === 0){
+    wrapper.innerHTML = "<em>No equipment listed for this appliance.</em>";
+    return;
+  }
+  let html = '<table><tr><th>Equipment Name</th><th>Status</th><th>Note (required for certain statuses)</th></tr>';
+  equipmentNames.forEach(name => {
+    const safe = name.replace(/"/g, '&quot;');
+    html += `<tr>
+      <td>${safe}</td>
+      <td>
+        <select name="equip__${safe}" class="status-select">
+          ${STATUS_OPTIONS.map(s => `<option ${s==='Ready for Use'?'selected':''}>${s}</option>`).join('')}
+        </select>
+      </td>
+      <td>
+        <input type="text" name="note__${safe}" placeholder="Add note if needed">
+      </td>
+    </tr>`;
+  });
+  html += '</table>';
+  wrapper.innerHTML = html;
+
+  const mustNote = new Set(["Note for follow-up","Tagged out for repairs","Damaged or Lost"]);
+  wrapper.querySelectorAll('.status-select').forEach(sel => {
+    sel.addEventListener('change', (e) => {
+      const row = e.target.closest('tr');
+      const noteInput = row.querySelector('input[type="text"]');
+      if (mustNote.has(e.target.value)){
+        noteInput.required = true;
+      } else {
+        noteInput.required = false;
+      }
+    });
+  });
+}
+
+document.getElementById('applianceSelect').addEventListener('change', async (e) => {
+  const appliance = e.target.value;
+  const sec = document.getElementById('equipmentSection');
+  try{
+    if (Object.keys(equipmentByAppliance).length === 0){
+      const res = await fetch("{{ url_for('api_equipment') }}");
+      equipmentByAppliance = await res.json();
+    }
+    const list = equipmentByAppliance[appliance] || [];
+    buildEquipmentTable(list);
+    sec.style.display = 'block';
+  }catch(err){
+    console.error(err);
+    sec.style.display = 'block';
+    document.getElementById('equipmentTableWrapper').innerHTML = "<em>Could not load equipment list.</em>";
+  }
+});
+</script>
+{% endblock %}
