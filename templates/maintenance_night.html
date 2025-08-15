@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card">
+  <h2>Maintenance Night Checklist</h2>
+  <form method="post" id="maintForm">
+    <div class="row">
+      <div class="col">
+        <label>Date</label><br>
+        <input type="date" name="date" required value="{{ now.strftime('%Y-%m-%d') }}">
+      </div>
+      <div class="col">
+        <label>Appliance</label><br>
+        <select name="appliance" id="applianceSelect" required>
+          <option disabled selected value="">Select appliance</option>
+          {% for a in appliances %}<option>{{ a }}</option>{% endfor %}
+        </select>
+      </div>
+    </div>
+
+    <div class="card" id="tasksSection" style="display:none;margin-top:16px;">
+      <h3>Tasks</h3>
+      <div id="tasksTableWrapper"><em>Select an appliance to load tasks.</em></div>
+    </div>
+
+    <div style="margin-top:12px;">
+      <button class="btn" type="submit">Submit</button>
+      <a class="btn btn-outline" href="{{ url_for('home') }}">Cancel</a>
+    </div>
+  </form>
+</div>
+
+<script>
+let TASKS = {{ tasks_by_appliance|tojson }};
+const STATUS = ["Completed","Needs follow-up"];
+
+function buildTasksTable(items){
+  const wrap = document.getElementById("tasksTableWrapper");
+  if (!items || items.length === 0){
+    wrap.innerHTML = "<em>No tasks configured for this appliance.</em>";
+    return;
+  }
+  let html = '<table><tr><th>Task</th><th>Area</th><th>Training</th><th>Status</th><th>Note (required if Needs follow-up)</th></tr>';
+  items.forEach(t => {
+    const task = (t.task || "").replace(/"/g, '&quot;');
+    const area = t.area || "";
+    const training = t.training || "";
+    html += `<tr>
+      <td>${task}</td>
+      <td>${area}</td>
+      <td>${training || "No"}</td>
+      <td>
+        <select name="task__${task}" class="status">
+          ${STATUS.map(s => `<option ${s==='Completed'?'selected':''}>${s}</option>`).join('')}
+        </select>
+      </td>
+      <td>
+        <input type="hidden" name="area__${task}" value="${area}">
+        <input type="hidden" name="training__${task}" value="${training}">
+        <input type="text" name="note__${task}" placeholder="Add note if needed">
+      </td>
+    </tr>`;
+  });
+  html += '</table>';
+  wrap.innerHTML = html;
+
+  const mustNote = new Set(["Needs follow-up"]);
+  wrap.querySelectorAll('.status').forEach(sel => {
+    sel.addEventListener('change', (e) => {
+      const row = e.target.closest('tr');
+      const note = row.querySelector('input[type="text"]');
+      if (mustNote.has(e.target.value)){ note.required = true; } else { note.required = false; }
+    });
+  });
+}
+
+document.getElementById("applianceSelect").addEventListener("change", async (e) => {
+  const appl = e.target.value;
+  const sec = document.getElementById("tasksSection");
+  try{
+    if (!TASKS || Object.keys(TASKS).length === 0){
+      const res = await fetch("{{ url_for('api_maintenance_tasks') }}");
+      TASKS = await res.json();
+    }
+    buildTasksTable(TASKS[appl] || []);
+    sec.style.display = 'block';
+  }catch(err){
+    console.error(err);
+    sec.style.display = 'block';
+    document.getElementById("tasksTableWrapper").innerHTML = "<em>Could not load tasks.</em>";
+  }
+});
+</script>
+{% endblock %}

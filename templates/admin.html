@@ -16,6 +16,12 @@
     <input type="file" name="file" accept=".csv" required>
     <button class="btn" type="submit">Upload Equipment CSV</button>
   </form>
+<form method="post" enctype="multipart/form-data" style="margin-top:12px;">
+  <label>Replace Maintenance Tasks (CSV/TSV)</label>
+  <input type="hidden" name="kind" value="maintenance">
+  <input type="file" name="file" accept=".csv,.tsv,.txt" required>
+  <button class="btn" type="submit">Upload Maintenance Tasks</button>
+</form>
 </div>
 
 <div class="card">

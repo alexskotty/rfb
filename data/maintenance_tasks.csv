@@ -1,0 +1,45 @@
+﻿Appliance,Task,Area,Training
+Pumper,Clean Cabin,Cabin,No
+Pumper,Check torch batteries,Cabin,No
+Pumper,Swap over Radio batteries,Cabin,No
+Pumper,Clean out rubbish,Cabin,No
+Pumper,Check Defibrulator ,Cabin,Yes
+Pumper,Check Gloves supplies,Cabin,No
+Pumper,Check mask supplies,Cabin,No
+Pumper,Check First Aid Kit in place,Pass Locker 1,No
+Pumper,Check BA 1,Pass Locker 1,Yes
+Pumper,Check BA 2 ,Pass Locker 1,Yes
+Pumper,Check Decom Kit Full,Pass Locker 1,No
+Pumper,Check TIC in place and charged,Pass Locker 1,No
+Pumper,Check branches and adaptors in place,Pass Locker 2,No
+Pumper,Check hoses stowed and flaked,Pass Locker 2,No
+Pumper,Check hoses flaked and setup with Structure branch,Back,No
+Pumper,Start and test Generator,Driver Locker 1,No
+Pumper,Start and test Posi Fan,Driver Locker 1,No
+Pumper,Test Milwalkee Batteries,Driver Locker 1,No
+Pumper,Check Fire extinguisher charged,Driver Locker 1,No
+Pumper,Check Water supplies,Driver Locker 1,No
+Pumper,Check Gloves supplies,Driver Locker 1,No
+Pumper,Check Kitty Litter there,Driver Locker 1,No
+Tanker 1,Clean Cabin,Cabin,No
+Tanker 1,Check torch batteries,Cabin,No
+Tanker 1,Swap over Radio batteries,Cabin,No
+Tanker 1,Clean out rubbish,Cabin,No
+Tanker 1,Check Defibrulator ,Cabin,Yes
+Tanker 1,Check Gloves supplies,Cabin,No
+Tanker 1,Check mask supplies,Cabin,No
+Tanker 1,Check First Aid Kit in place,Pass Locker 1,No
+Tanker 1,Check BA 1,Pass Locker 1,Yes
+Tanker 1,Check BA 2 ,Pass Locker 1,Yes
+Tanker 1,Check Decom Kit Full,Pass Locker 1,No
+Tanker 1,Check TIC in place and charged,Pass Locker 1,No
+Tanker 1,Check branches and adaptors in place,Pass Locker 2,No
+Tanker 1,Check hoses stowed,Pass Locker 2,No
+Tanker 1,Start and test chainsaw,Back locker,
+Tanker 1,Check drip torch ,Top Deck,
+Tanker 1,Check drip torch fuel,Top Deck,
+Tanker 1,Check Fire extinguisher charged,Driver Locker 1,No
+Tanker 1,Test Milwalkee Batteries,Driver Locker 1,No
+Tanker 1,Check Water supplies,Driver Locker 1,No
+Tanker 1,Check Gloves supplies,Driver Locker 1,No
+Tanker 1,Check Kitty Litter there,Driver Locker 1,No
