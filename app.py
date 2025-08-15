@@ -1,6 +1,8 @@
-import os, json, csv, time, re
+import os, json, csv, time, re, smtplib
 from datetime import datetime
 from pathlib import Path
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 from flask import (
     Flask, render_template, request, redirect, url_for,
     session, send_from_directory, flash, jsonify
@@ -58,6 +60,33 @@ def _write_csv_rows(path: Path, fieldnames, rows):
         w.writeheader()
         for r in rows:
             w.writerow(r)
+
+# ---------- Email helper ----------
+def send_email(subject: str, body: str):
+    smtp_server = os.environ.get("SMTP_SERVER", "smtp.gmail.com")
+    smtp_port = int(os.environ.get("SMTP_PORT", 587))
+    smtp_user = os.environ.get("SMTP_USER")
+    smtp_pass = os.environ.get("SMTP_PASS")
+    email_to = os.environ.get("EMAIL_TO", "alexskotty@gmail.com")
+
+    if not smtp_user or not smtp_pass:
+        print("⚠️ Email not sent — set SMTP_USER and SMTP_PASS env vars to enable.")
+        return
+
+    msg = MIMEMultipart()
+    msg["From"] = smtp_user
+    msg["To"] = email_to
+    msg["Subject"] = subject
+    msg.attach(MIMEText(body, "plain"))
+
+    try:
+        with smtplib.SMTP(smtp_server, smtp_port) as server:
+            server.starttls()
+            server.login(smtp_user, smtp_pass)
+            server.send_message(msg)
+        print(f"✅ Email sent to {email_to}")
+    except Exception as e:
+        print(f"❌ Email send failed: {e}")
 
 # ---------- Loaders ----------
 def load_users_from_crew():
@@ -123,8 +152,8 @@ def load_equipment_by_appliance():
 
 def load_maintenance_tasks():
     """
-    Returns {appliance: [ {task, area, training}, ... ] }.
-    Auto-detects columns (Appliance, Task, Area, Training).
+    Returns {appliance: [ {task, area}, ... ] }.
+    Auto-detects columns (Appliance, Task, Area). (Training ignored by design.)
     """
     rows = _read_csv_rows(MAINT_CSV)
     if not rows:
@@ -136,7 +165,6 @@ def load_maintenance_tasks():
     appl_col = nmap.get("appliance") or next((nmap[h] for h in nmap if "appliance" in h), None)
     task_col = nmap.get("task") or next((nmap[h] for h in nmap if "task" in h), None)
     area_col = nmap.get("area") or next((nmap[h] for h in nmap if "area" in h), None)
-    train_col = nmap.get("training") or next((nmap[h] for h in nmap if "train" in h), None)
 
     if not (appl_col and task_col):
         return {}
@@ -146,10 +174,9 @@ def load_maintenance_tasks():
         appl = (r.get(appl_col) or "").strip()
         task = (r.get(task_col) or "").strip()
         area = (r.get(area_col) or "").strip() if area_col else ""
-        training = (r.get(train_col) or "").strip() if train_col else ""
         if not appl or not task:
             continue
-        out.setdefault(appl, []).append({"task": task, "area": area, "training": training})
+        out.setdefault(appl, []).append({"task": task, "area": area})
     return out
 
 def load_admins():
@@ -299,6 +326,7 @@ def post_job_checklist():
                 now=datetime.now(),
             )
 
+        # Save CSV
         SUBMISSIONS_DIR.mkdir(parents=True, exist_ok=True)
         filename = f"post_job_{int(time.time())}.csv"
         path = SUBMISSIONS_DIR / filename
@@ -317,6 +345,29 @@ def post_job_checklist():
                 "confirmed_ready": data["confirmed_ready"],
             })
         _write_csv_rows(path, list(rows[0].keys()), rows)
+
+        # Email summary
+        body_lines = [
+            f"Submitted At: {data['submitted_at']}",
+            f"Date: {data['date']}",
+            f"Driver: {data['driver']}",
+            f"Crew: {', '.join(data['crew'])}",
+            f"Job Type: {data['job_type']}",
+            f"Appliance: {data['appliance']}",
+            f"Confirmed Ready: {data['confirmed_ready']}",
+            "",
+            "Equipment status:",
+        ]
+        for r in equip_rows:
+            line = f"- {r['equipment_name']} — {r['status']}"
+            if r['note']:
+                line += f" — Note: {r['note']}"
+            body_lines.append(line)
+        send_email(
+            subject=f"Post Job Checklist — {data['appliance']} ({data['date']})",
+            body="\n".join(body_lines)
+        )
+
         flash(f"Checklist saved: {filename}", "success")
         return redirect(url_for("post_job_checklist_success", fname=filename))
 
@@ -347,9 +398,14 @@ def maintenance_night():
     fallback = ["Pumper", "Tanker 1", "Tanker 2", "FCV", "Quick Fill", "Trailer", "Collar Tank"]
     appliances = sorted(tasks_by_appliance.keys()) if tasks_by_appliance else fallback
 
+    users = load_users_from_crew()
+    crew_choices = [{"username": u, "name": info["name"]} for u, info in sorted(users.items(), key=lambda x: x[1]["name"])]
+
     if request.method == "POST":
         date = request.form.get("date")
         appliance = request.form.get("appliance")
+        crew_done = request.form.getlist("crew_doing")  # multi-select crew
+
         rows = []
         for key in request.form:
             if key.startswith("task__"):
@@ -357,23 +413,24 @@ def maintenance_night():
                 status = request.form.get(key)
                 note = request.form.get(f"note__{taskname}", "").strip()
                 area = request.form.get(f"area__{taskname}", "")
-                training = request.form.get(f"training__{taskname}", "")
                 rows.append({
                     "submitted_at": datetime.now().isoformat(timespec="seconds"),
                     "date": date,
                     "appliance": appliance,
+                    "crew_doing": ";".join(crew_done),
                     "task": taskname,
                     "area": area,
-                    "training": training,
                     "status": status,
                     "note": note,
                 })
+
         for r in rows:
             if r["status"] == "Needs follow-up" and not r["note"]:
                 flash(f'Note required for "{r["task"]}" when status is "Needs follow-up".', "error")
                 return render_template("maintenance_night.html",
                     appliances=appliances,
                     tasks_by_appliance=tasks_by_appliance,
+                    crew=crew_choices,
                     now=datetime.now(),
                 )
         if not rows:
@@ -381,20 +438,42 @@ def maintenance_night():
             return render_template("maintenance_night.html",
                 appliances=appliances,
                 tasks_by_appliance=tasks_by_appliance,
+                crew=crew_choices,
                 now=datetime.now(),
             )
 
+        # Save CSV
         MAINT_SUB_DIR.mkdir(parents=True, exist_ok=True)
         fname = f"maintenance_{int(time.time())}.csv"
         fpath = MAINT_SUB_DIR / fname
         fieldnames = list(rows[0].keys())
         _write_csv_rows(fpath, fieldnames, rows)
+
+        # Email summary
+        body_lines = [
+            f"Date: {date}",
+            f"Appliance: {appliance}",
+            f"Crew Doing: {', '.join(crew_done)}",
+            "",
+            "Tasks:",
+        ]
+        for r in rows:
+            line = f"- {r['task']} — {r['status']}"
+            if r['note']:
+                line += f" — Note: {r['note']}"
+            body_lines.append(line)
+        send_email(
+            subject=f"Maintenance Night Checklist — {appliance} ({date})",
+            body="\n".join(body_lines)
+        )
+
         flash(f"Maintenance checklist saved: {fname}", "success")
         return redirect(url_for("maintenance_night"))
 
     return render_template("maintenance_night.html",
         appliances=appliances,
         tasks_by_appliance=tasks_by_appliance,
+        crew=crew_choices,
         now=datetime.now(),
     )
 
@@ -409,7 +488,7 @@ def api_maintenance_tasks():
 def weekly_maintenance():
     return render_template("placeholder.html", title="Weekly Maintenance Checklist")
 
-# ----- Static passthrough (for style.css if used that way) -----
+# ----- Static passthrough -----
 @app.route("/static/<path:filename>")
 def custom_static(filename):
     return send_from_directory((BASE_DIR / "static"), filename)

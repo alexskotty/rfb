@@ -17,6 +17,15 @@
       </div>
     </div>
 
+    <div style="margin-top:12px;">
+      <label>Crew who performed the check (select all that apply)</label><br>
+      <select name="crew_doing" multiple size="6" required style="min-width:260px;">
+        {% for c in crew %}
+          <option value="{{ c.username }}">{{ c.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
     <div class="card" id="tasksSection" style="display:none;margin-top:16px;">
       <h3>Tasks</h3>
       <div id="tasksTableWrapper"><em>Select an appliance to load tasks.</em></div>
@@ -39,15 +48,13 @@ function buildTasksTable(items){
     wrap.innerHTML = "<em>No tasks configured for this appliance.</em>";
     return;
   }
-  let html = '<table><tr><th>Task</th><th>Area</th><th>Training</th><th>Status</th><th>Note (required if Needs follow-up)</th></tr>';
+  let html = '<table><tr><th>Task</th><th>Area</th><th>Status</th><th>Note (required if Needs follow-up)</th></tr>';
   items.forEach(t => {
     const task = (t.task || "").replace(/"/g, '&quot;');
     const area = t.area || "";
-    const training = t.training || "";
     html += `<tr>
       <td>${task}</td>
       <td>${area}</td>
-      <td>${training || "No"}</td>
       <td>
         <select name="task__${task}" class="status">
           ${STATUS.map(s => `<option ${s==='Completed'?'selected':''}>${s}</option>`).join('')}
@@ -55,7 +62,6 @@ function buildTasksTable(items){
       </td>
       <td>
         <input type="hidden" name="area__${task}" value="${area}">
-        <input type="hidden" name="training__${task}" value="${training}">
         <input type="text" name="note__${task}" placeholder="Add note if needed">
       </td>
     </tr>`;
@@ -68,7 +74,7 @@ function buildTasksTable(items){
     sel.addEventListener('change', (e) => {
       const row = e.target.closest('tr');
       const note = row.querySelector('input[type="text"]');
-      if (mustNote.has(e.target.value)){ note.required = true; } else { note.required = false; }
+      note.required = mustNote.has(e.target.value);
     });
   });
 }
